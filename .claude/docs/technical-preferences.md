@@ -5,30 +5,32 @@
 
 ## Engine & Language
 
-- **Engine**: [TO BE CONFIGURED — run /setup-engine]
-- **Language**: [TO BE CONFIGURED]
-- **Rendering**: [TO BE CONFIGURED]
-- **Physics**: [TO BE CONFIGURED]
+- **Engine**: Unity 6.4 (6000.4)
+- **Language**: C#
+- **Rendering**: URP (Universal Render Pipeline) — Render Graph API (mandatory in 6.4; Compatibility Mode removed)
+- **Physics**: Unity Physics (Rigidbody / PhysX)
 
 ## Naming Conventions
 
-- **Classes**: [TO BE CONFIGURED]
-- **Variables**: [TO BE CONFIGURED]
-- **Signals/Events**: [TO BE CONFIGURED]
-- **Files**: [TO BE CONFIGURED]
-- **Scenes/Prefabs**: [TO BE CONFIGURED]
-- **Constants**: [TO BE CONFIGURED]
+- **Classes**: PascalCase (e.g., `PlayerController`)
+- **Public fields/properties**: PascalCase (e.g., `MoveSpeed`)
+- **Private fields**: _camelCase (e.g., `_moveSpeed`)
+- **Methods**: PascalCase (e.g., `TakeDamage()`)
+- **Events/UnityEvents**: PascalCase (e.g., `OnHealthChanged`)
+- **Files**: PascalCase matching class (e.g., `PlayerController.cs`)
+- **Scenes/Prefabs**: PascalCase (e.g., `MainMenu.unity`, `EnemySpawner.prefab`)
+- **Constants**: PascalCase or UPPER_SNAKE_CASE
 
 ## Performance Budgets
 
-- **Target Framerate**: [TO BE CONFIGURED]
-- **Frame Budget**: [TO BE CONFIGURED]
+- **Target Framerate**: 60 fps
+- **Frame Budget**: 16.6 ms
 - **Draw Calls**: [TO BE CONFIGURED]
 - **Memory Ceiling**: [TO BE CONFIGURED]
 
 ## Testing
 
-- **Framework**: [TO BE CONFIGURED]
+- **Framework**: NUnit (Unity Test Framework, built-in)
 - **Minimum Coverage**: [TO BE CONFIGURED]
 - **Required Tests**: Balance formulas, gameplay systems, networking (if applicable)
 

@@ -1,78 +1,103 @@
-# Unity 6.3 LTS — Current Best Practices
+# Unity 6 — Current Best Practices
 
-**Last verified:** 2026-02-13
+**Last verified:** 2026-03-25 (Unity 6.4 / 6000.4)
 
-Modern Unity 6 patterns that may not be in the LLM's training data.
-These are production-ready recommendations as of Unity 6.3 LTS.
-
----
-
-## Project Setup
-
-### Use Unity 6.3 LTS for Production
-- **Tech Stream** (6.4+): Latest features, less stable
-- **LTS** (6.3): Production-ready, 2-year support (until Dec 2027)
-
-### Choose the Right Render Pipeline
-- **URP (Universal)**: Mobile, cross-platform, good performance ✅ Recommended for most games
-- **HDRP (High Definition)**: High-end PC/console, photorealistic
-- **Built-in**: Deprecated, avoid for new projects
+Modern Unity 6.4 patterns. Prefer these over anything the model suggests
+from prior Unity 2022/2023 knowledge.
 
 ---
 
-## Scripting
+## Render Graph (URP) — MANDATORY from 6.4
 
-### Use C# 9+ Features (Unity 6 Supports C# 9)
-
-```csharp
-// ✅ Record types for data
-public record PlayerData(string Name, int Level, float Health);
-
-// ✅ Init-only properties
-public class Config {
-    public string GameMode { get; init; }
-}
-
-// ✅ Pattern matching
-var result = enemy switch {
-    Boss boss => boss.Enrage(),
-    Minion minion => minion.Flee(),
-    _ => null
-};
-```
-
-### Async/Await for Asset Loading
+URP Compatibility Mode is gone. All custom render passes must use the Render Graph API.
+The LLM will suggest `Execute(ScriptableRenderContext, ref RenderingData)` — do not use it.
 
 ```csharp
-// ✅ Modern async pattern
-public async Task<GameObject> LoadEnemyAsync(string key) {
-    var handle = Addressables.LoadAssetAsync<GameObject>(key);
-    return await handle.Task;
+// ❌ OLD — compile error in 6.4
+public override void Execute(ScriptableRenderContext context, ref RenderingData data) { }
+
+// ✅ NEW — Render Graph
+public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
+{
+    using (var builder = renderGraph.AddRasterRenderPass<PassData>("MyPass", out var passData))
+    {
+        var resourceData = frameData.Get<UniversalResourceData>();
+        builder.UseTexture(resourceData.activeColorTexture);
+        builder.SetRenderFunc((PassData data, RasterGraphContext ctx) =>
+        {
+            // ctx.cmd for draw calls
+        });
+    }
 }
 ```
 
-### Use Source Generators for Serialization (Unity 6+)
+**Key rules:**
+- Declare ALL resource usage via `builder.UseTexture()` / `builder.SetRenderAttachment()` before the render func.
+- Do NOT hold `RTHandle` references across frames inside Render Graph passes.
+- Use **Render Graph Viewer** (Window > Analysis > Render Graph Viewer) to debug pass execution.
+
+---
+
+## GPU Resident Drawer
+
+Automatically batches draw calls via `BatchRendererGroup`. Can reduce thousands of
+draw calls to tens for large scenes — directly relevant to CloudsCity's city tiers.
+
+**Enable**: Project Settings > Graphics > GPU Resident Drawer > Instanced Drawing
+
+**Compatibility requirements:**
+- Do NOT use `MaterialPropertyBlock` on batched objects — breaks batching
+- Avoid `OnRenderObject` callbacks on batched objects
+- Use DOTS-instancing shaders or standard URP Lit (already compatible)
+- Static environment geometry benefits most; skinned/dynamic meshes benefit less
+
+---
+
+## Adaptive Probe Volumes (APV)
+
+Replaces manual Light Probe Groups. Preferred for all new projects.
+
+**Enable**: Lighting Settings > Light Probe System > Probe Volumes
+
+Features:
+- Auto-places probes based on scene geometry
+- Disk streaming for large scenes
+- Sky occlusion baking
+- Lighting scenario blending (blend between baked lighting states at runtime)
+- Available in both URP and HDRP
+
+---
+
+## DirectStorage (6.4, Windows)
+
+Reduces CPU overhead for loading large assets (textures, meshes, DOTS entity data).
+Useful for streaming multi-layer environments.
+
+**Enable**: Project Settings > Player > Enable DirectStorage
+
+---
+
+## Object Finding — Use the New API
 
 ```csharp
-// ✅ Source-generated serialization (faster, less reflection)
-[GenerateSerializer]
-public partial struct PlayerStats : IComponentData {
-    public int Health;
-    public int Mana;
-}
+// ❌ Deprecated — do not use
+FindObjectsOfType<Enemy>();
+FindObjectOfType<GameManager>();
+
+// ✅ Use these
+FindObjectsByType<Enemy>(FindObjectsSortMode.None);         // unsorted, fastest
+FindObjectsByType<Enemy>(FindObjectsSortMode.ByInstanceID); // deterministic order
+FindFirstObjectByType<GameManager>();   // fastest single-object lookup
+FindAnyObjectByType<GameManager>();     // any instance, non-deterministic
 ```
 
 ---
 
-## DOTS/ECS (Production-Ready in Unity 6.3 LTS)
-
-### Use ISystem (Not ComponentSystem)
+## DOTS/ECS (Core in 6.4 — no separate install needed)
 
 ```csharp
-// ✅ Modern unmanaged ISystem (Burst-compatible)
+// ✅ Modern ISystem (unmanaged, Burst-compatible)
 public partial struct MovementSystem : ISystem {
-    public void OnCreate(ref SystemState state) { }
-
     public void OnUpdate(ref SystemState state) {
         foreach (var (transform, speed) in
             SystemAPI.Query<RefRW<LocalTransform>, RefRO<MoveSpeed>>()) {
@@ -80,255 +105,195 @@ public partial struct MovementSystem : ISystem {
         }
     }
 }
-```
 
-### Use IJobEntity for Parallel Jobs
-
-```csharp
-// ✅ IJobEntity (replaces IJobForEach)
+// ✅ IJobEntity for parallel jobs
 [BurstCompile]
 public partial struct DamageJob : IJobEntity {
     public float DeltaTime;
-
     void Execute(ref Health health, in DamageOverTime dot) {
         health.Value -= dot.DamagePerSecond * DeltaTime;
     }
 }
-
-// Schedule it
-var job = new DamageJob { DeltaTime = SystemAPI.Time.DeltaTime };
-job.ScheduleParallel();
 ```
+
+Use `EntityId` (not `InstanceID`) for ECS object identity in 6.4.
 
 ---
 
-## Input
-
-### Use Input System Package (Not Legacy Input)
+## Input System
 
 ```csharp
-// ✅ Input Actions (rebindable, cross-platform)
+// ❌ Deprecated Legacy Input — do not use
+if (Input.GetKeyDown(KeyCode.Space)) { }
+
+// ✅ Input System package (com.unity.inputsystem)
 using UnityEngine.InputSystem;
 
 public class PlayerInput : MonoBehaviour {
-    private PlayerControls controls;
+    private PlayerControls _controls; // generated C# class from Input Actions asset
 
     void Awake() {
-        controls = new PlayerControls();
-        controls.Gameplay.Jump.performed += ctx => Jump();
+        _controls = new PlayerControls();
+        _controls.Gameplay.Jump.performed += ctx => Jump();
     }
 
-    void OnEnable() => controls.Enable();
-    void OnDisable() => controls.Disable();
+    void OnEnable() => _controls.Enable();
+    void OnDisable() => _controls.Disable();
 }
 ```
 
-Create Input Actions asset in editor, generate C# class via inspector.
+Create Input Actions asset in editor, right-click > Generate C# class.
 
 ---
 
-## UI
-
-### Use UI Toolkit for Runtime UI (Production-Ready in Unity 6)
+## UI Toolkit (Runtime UI)
 
 ```csharp
-// ✅ UI Toolkit (replaces UGUI for new projects)
+// ✅ UI Toolkit — recommended for new projects
 using UnityEngine.UIElements;
 
 public class MainMenu : MonoBehaviour {
     void OnEnable() {
         var root = GetComponent<UIDocument>().rootVisualElement;
-
-        var playButton = root.Q<Button>("play-button");
-        playButton.clicked += StartGame;
-
-        var scoreLabel = root.Q<Label>("score");
-        scoreLabel.text = $"High Score: {PlayerPrefs.GetInt("HighScore")}";
+        root.Q<Button>("play-button").clicked += StartGame;
+        root.Q<Label>("score").text = $"High Score: {PlayerPrefs.GetInt("HighScore")}";
     }
+}
+
+// ✅ Custom control (6.2+ attribute syntax)
+[UxmlElement]
+public partial class ResourceBar : VisualElement {
+    [UxmlAttribute]
+    public float MaxValue { get; set; }
 }
 ```
 
-**UXML** (UI structure) + **USS** (styling) = HTML/CSS-like workflow.
+UXML (structure) + USS (styling) = HTML/CSS-like workflow.
+UGUI still works but UI Toolkit is preferred for new UI in Unity 6.
 
 ---
 
 ## Asset Management
 
-### Use Addressables (Not Resources)
-
 ```csharp
+// ❌ Deprecated
+var prefab = Resources.Load<GameObject>("City/BuildingA");
+
 // ✅ Addressables (async, memory-efficient)
 using UnityEngine.AddressableAssets;
 
-public async Task SpawnEnemyAsync(string enemyKey) {
-    var handle = Addressables.InstantiateAsync(enemyKey);
-    var enemy = await handle.Task;
-
-    // Cleanup: release when destroyed
-    Addressables.ReleaseInstance(enemy);
+public async Task<GameObject> SpawnBuildingAsync(string key) {
+    try {
+        var handle = Addressables.InstantiateAsync(key);
+        return await handle.Task;
+    } catch (Exception e) {
+        Debug.LogError($"Failed to spawn building: {e}");
+        return null;
+    }
 }
+// Release when done: Addressables.ReleaseInstance(go);
 ```
-
-**Benefits:** Async loading, remote content delivery, better memory control.
 
 ---
 
-## Rendering
-
-### Use RenderGraph API for Custom Passes (URP/HDRP)
+## Lighting — Manual Bake Required
 
 ```csharp
-// ✅ RenderGraph API (Unity 6+)
-public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData) {
-    using (var builder = renderGraph.AddRasterRenderPass<PassData>("My Pass", out var passData)) {
-        // Setup pass
-        builder.SetRenderFunc((PassData data, RasterGraphContext context) => {
-            // Execute commands
-        });
-    }
-}
-```
+// Trigger bake from code
+await Lightmapping.BakeAsync();
 
-**Replaces:** Old `CommandBuffer.Execute()` pattern.
+// Or in editor: Window > Rendering > Lighting > Generate Lighting
+// Auto Generate is OFF in Unity 6 — must bake manually after scene changes
+```
 
 ---
 
 ## Performance
 
-### Use Burst Compiler + Jobs System
-
 ```csharp
-// ✅ Burst-compiled job (massive performance gain)
+// ✅ Burst-compiled parallel job
 [BurstCompile]
-struct ParticleUpdateJob : IJobParallelFor {
+struct UpdateJob : IJobParallelFor {
     public NativeArray<float3> Positions;
     public NativeArray<float3> Velocities;
     public float DeltaTime;
 
-    public void Execute(int index) {
-        Positions[index] += Velocities[index] * DeltaTime;
+    public void Execute(int i) {
+        Positions[i] += Velocities[i] * DeltaTime;
     }
 }
 
-// Schedule
-var job = new ParticleUpdateJob {
-    Positions = positions,
-    Velocities = velocities,
-    DeltaTime = Time.deltaTime
+// ✅ NativeArray — no GC, Burst-compatible
+using var positions = new NativeArray<float3>(count, Allocator.TempJob);
+```
+
+---
+
+## Animation (6.4)
+
+State machines can now initialize in non-default states — no more one-frame
+transition delay on Animator start. No API change required; applies automatically.
+
+---
+
+## Scripting — C# 9+ Features (Unity 6)
+
+```csharp
+// ✅ Records for data
+public record BuildingData(string Id, int Level, Vector3 Position);
+
+// ✅ Pattern matching
+var result = building switch {
+    Tower t when t.Level > 5 => t.Upgrade(),
+    Residential r => r.AddFloor(),
+    _ => null
 };
-job.Schedule(positions.Length, 64).Complete();
-```
 
-**20-100x faster** than equivalent C# code.
-
----
-
-### Use GPU Instancing for Repeated Objects
-
-```csharp
-// ✅ GPU Instancing (thousands of objects, minimal draw calls)
-Graphics.RenderMeshInstanced(
-    new RenderParams(material),
-    mesh,
-    0,
-    matrices // NativeArray<Matrix4x4>
-);
-```
-
----
-
-## Memory Management
-
-### Use NativeContainers (Not Managed Arrays in Jobs)
-
-```csharp
-// ✅ NativeArray (no GC, Burst-compatible)
-NativeArray<int> data = new NativeArray<int>(1000, Allocator.TempJob);
-// ... use in job
-data.Dispose(); // Manual cleanup required
-
-// ✅ Or use using statement
-using var data = new NativeArray<int>(1000, Allocator.TempJob);
-// Auto-disposed
-```
-
----
-
-## Multiplayer
-
-### Use Netcode for GameObjects (Official)
-
-```csharp
-// ✅ Unity's official netcode
-using Unity.Netcode;
-
-public class Player : NetworkBehaviour {
-    private NetworkVariable<int> health = new NetworkVariable<int>(100);
-
-    [ServerRpc]
-    public void TakeDamageServerRpc(int damage) {
-        health.Value -= damage;
-    }
+// ✅ Init-only properties
+public class CityConfig {
+    public int MaxTiers { get; init; }
+    public float TierHeight { get; init; }
 }
 ```
 
-**Replaces:** UNet (deprecated), MLAPI (renamed to Netcode for GameObjects).
-
 ---
 
-## Testing
-
-### Use Unity Test Framework (NUnit-based)
+## Testing (NUnit / Unity Test Framework)
 
 ```csharp
-// ✅ Play Mode Test
 [UnityTest]
-public IEnumerator Player_TakesDamage_HealthDecreases() {
-    var player = new GameObject().AddComponent<Player>();
-    player.Health = 100;
+public IEnumerator Building_WhenPlaced_IncreasesPopulation() {
+    var city = new GameObject().AddComponent<CityManager>();
+    var before = city.Population;
 
-    player.TakeDamage(25);
-    yield return null; // Wait one frame
+    city.PlaceBuilding(BuildingType.Residential, Vector3.zero);
+    yield return null; // one frame
 
-    Assert.AreEqual(75, player.Health);
+    Assert.Greater(city.Population, before);
 }
 ```
 
----
-
-## Debugging
-
-### Use Logging Best Practices
-
-```csharp
-// ✅ Structured logging (Unity 6+)
-using UnityEngine;
-
-Debug.Log($"Player {playerName} scored {score} points");
-
-// ✅ Conditional compilation for debug code
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-    Debug.DrawRay(transform.position, direction, Color.red);
-#endif
-```
+Run via Window > General > Test Runner.
 
 ---
 
-## Summary: Unity 6 Tech Stack
+## Summary: Unity 6.4 Stack
 
-| Feature | Use This (2026) | Avoid This (Legacy) |
-|---------|------------------|----------------------|
+| Feature | Use This | Avoid |
+|---------|----------|-------|
+| **Render passes** | `RecordRenderGraph()` | `Execute()` (removed) |
+| **Instancing** | GPU Resident Drawer | Manual `MaterialPropertyBlock` batching |
+| **Probes** | Adaptive Probe Volumes | Manual Light Probe Groups |
 | **Input** | Input System package | `Input` class |
-| **UI** | UI Toolkit | UGUI (Canvas) |
-| **ECS** | ISystem + IJobEntity | ComponentSystem |
-| **Rendering** | URP + RenderGraph | Built-in pipeline |
-| **Assets** | Addressables | Resources |
-| **Jobs** | Burst + IJobParallelFor | Coroutines for heavy work |
-| **Multiplayer** | Netcode for GameObjects | UNet |
+| **UI** | UI Toolkit | UGUI (still works, not preferred) |
+| **ECS** | `ISystem` + `IJobEntity` | `ComponentSystem` (removed) |
+| **Assets** | Addressables | `Resources.Load` |
+| **Object find** | `FindObjectsByType` | `FindObjectsOfType` |
 
 ---
 
 **Sources:**
-- https://docs.unity3d.com/6000.0/Documentation/Manual/BestPracticeGuides.html
+- https://docs.unity3d.com/6000.4/Documentation/Manual/WhatsNewUnity64.html
+- https://docs.unity3d.com/6000.4/Documentation/Manual/BestPracticeGuides.html
 - https://docs.unity3d.com/Packages/com.unity.entities@1.3/manual/index.html
 - https://docs.unity3d.com/Packages/com.unity.inputsystem@1.11/manual/index.html

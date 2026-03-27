@@ -1,0 +1,3 @@
+[submodule "prototypes/CityBuilder"]
+	path = prototypes/CityBuilder
+	url = git@github.com:nurbed/CityBuilder.git
