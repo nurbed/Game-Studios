@@ -1,99 +1,100 @@
 ---
 name: prototype
-description: "Rapid prototyping workflow. Skips normal standards to quickly validate a game concept or mechanic. Produces throwaway code and a structured prototype report."
-argument-hint: "[concept-description]"
+description: "Concept prototype before GDDs — throwaway HTML, Engine or Paper build, PROCEED/PIVOT/KILL/NOT ASSESSED. After /brainstorm and /setup-engine."
+argument-hint: "[concept-description] [--path html|engine|paper] [--review full|lean|solo] [--spike]"
 user-invocable: true
-allowed-tools: Read, Glob, Grep, Write, Edit, Bash
+allowed-tools: Read, Glob, Grep, Write, Edit, Agent, AskUserQuestion, Bash(bash "*/.claude/skills/prototype/../../hooks/yaml-helper.sh" resolve_config *)
+model: sonnet
 ---
 
-When this skill is invoked:
+!`bash "${CLAUDE_SKILL_DIR}/../../hooks/yaml-helper.sh" resolve_config --keys review_mode,automation,workflow`
 
-1. **Read the concept description** from the argument. Identify the core
-   question this prototype must answer. If the concept is vague, state the
-   question explicitly before proceeding.
+Resolved above — use as-is; `--review` overrides `review_mode` for this run. No
+block → defaults in `.claude/docs/config-resolution.md`.
 
-2. **Read CLAUDE.md** for project context and the current tech stack. Understand
-   what engine, language, and frameworks are in use so the prototype is built
-   with compatible tooling.
+# Prototype
 
-3. **Create a prototype plan**: Define in 3-5 bullet points what the minimum
-   viable prototype looks like. What is the core question? What is the absolute
-   minimum code needed to answer it? What can be skipped?
+## Purpose
 
-4. **Create the prototype directory**: `prototypes/[concept-name]/` where
-   `[concept-name]` is a short, kebab-case identifier derived from the concept.
+This is the **concept prototype** — a fast, throwaway build that answers one question:
+*"Is this core idea actually fun to interact with?"*
 
-5. **Implement the prototype** in the isolated directory. Every file must begin
-   with:
-   ```
-   // PROTOTYPE - NOT FOR PRODUCTION
-   // Question: [Core question being tested]
-   // Date: [Current date]
-   ```
-   Standards are intentionally relaxed:
-   - Hardcode values freely
-   - Use placeholder assets
-   - Skip error handling
-   - Use the simplest approach that works
-   - Copy code rather than importing from production
+**Default use** — run right after `/brainstorm` and `/setup-engine`, before writing
+GDDs or architecture docs. Its verdict determines whether the concept is worth the
+investment of full design documentation.
 
-6. **Test the concept**: Run the prototype. Observe behavior. Collect any
-   measurable data (frame times, interaction counts, feel assessments).
+**Mid-production?** You can also run this at any stage to test a specific mechanic,
+design change, or technical question. Pass `--spike` to activate spike mode: a
+lightweight ~4-hour build with no GDD prerequisites and no phase gate implications.
 
-7. **Generate the Prototype Report** and save it to
-   `prototypes/[concept-name]/REPORT.md`:
+**Already have GDDs and architecture complete?** To validate the full game loop
+before committing to Production, run `/vertical-slice` instead.
 
-```markdown
-## Prototype Report: [Concept Name]
+---
 
-### Hypothesis
-[What we expected to be true -- the question we set out to answer]
+## Phase 1: Define the Question
 
-### Approach
-[What we built, how long it took, what shortcuts we took]
+**Read `references/1-question.md` now and follow it** — this phase's steps are in that file, not here. Read it again if the conversation was compacted or resumed during this phase.
 
-### Result
-[What actually happened -- specific observations, not opinions]
+## Phase 2: Load Concept Context
 
-### Metrics
-[Any measurable data collected during testing]
-- Frame time: [if relevant]
-- Feel assessment: [subjective but specific -- "response felt sluggish at
-  200ms delay" not "felt bad"]
-- Player action counts: [if relevant]
-- Iteration count: [how many attempts to get it working]
+**Read `references/2-load-context.md` now and follow it** — this phase's steps are in that file, not here. Read it again if the conversation was compacted or resumed during this phase.
 
-### Recommendation: [PROCEED / PIVOT / KILL]
+## Phase 3: Choose the Prototype Path
 
-[One paragraph explaining the recommendation with evidence]
+**Read `references/3-choose-path.md` now and follow it** — this phase's steps are in that file, not here. Read it again if the conversation was compacted or resumed during this phase.
 
-### If Proceeding
-[What needs to change for a production-quality implementation]
-- Architecture requirements
-- Performance targets
-- Scope adjustments from the original design
-- Estimated production effort
+## Phase 4: Plan the Prototype
 
-### If Pivoting
-[What alternative direction the results suggest]
+**Read `references/4-plan.md` now and follow it** — this phase's steps are in that file, not here. Read it again if the conversation was compacted or resumed during this phase.
 
-### If Killing
-[Why this concept does not work and what we should do instead]
+## Phase 5: Implement
 
-### Lessons Learned
-[Discoveries that affect other systems or future work]
-```
+**Read `references/5-implement.md` now and follow it** — this phase's steps are in that file, not here. Read it again if the conversation was compacted or resumed during this phase.
 
-8. **Output a summary** to the user with: the core question, the result, and
-   the recommendation. Link to the full report at
-   `prototypes/[concept-name]/REPORT.md`.
+## Phase 6: Playtest Debrief
+
+**Read `references/6-debrief.md` now and follow it** — this phase's steps are in that file, not here. Read it again if the conversation was compacted or resumed during this phase.
+
+## Phase 7: Generate Prototype Report
+
+**Read `references/7-report.md` now and follow it** — this phase's steps are in that file, not here. Read it again if the conversation was compacted or resumed during this phase.
+
+## Phase 8: Creative Director Review
+
+**Read `references/8-cd-review.md` now and follow it** — this phase's steps are in that file, not here. Read it again if the conversation was compacted or resumed during this phase.
+
+## Phase 9: Summary and Next Steps
+
+**Read `references/9-summary.md` now and follow it** — this phase's steps are in that file, not here. Read it again if the conversation was compacted or resumed during this phase.
+
+## Spike Mode
+
+**Triggered by:** `--spike` flag OR "Mid-production spike" entry choice in Phase 1.
+
+**Read `references/spike-mode.md` now and follow it** — this phase's steps are in that file, not here. Read it again if the conversation was compacted or resumed during this phase.
 
 ### Important Constraints
 
 - Prototype code must NEVER import from production source files
 - Production code must NEVER import from prototype directories
-- If the recommendation is PROCEED, the production implementation must be
-  written from scratch -- prototype code is not refactored into production
-- Total prototype effort should be timeboxed to 1-3 days equivalent of work
-- If the prototype scope starts growing, stop and reassess whether the
-  question can be simplified
+- If the recommendation is PROCEED, production implementation is written from
+  scratch — prototype code is never refactored into production
+- Total effort is hard-capped at 1 day (concept prototypes test one mechanic)
+- Test ONE mechanic — if scope grows, stop and simplify the question
+- No polish. No menus, no game over, no music, no UI unless it IS the mechanic
+- If stuck after 2 hours of engine iteration, reframe the question or switch paths
+- **3 PIVOT iterations → force a KILL decision.** If this is the third time the
+  same concept has produced a PIVOT verdict, the concept likely doesn't work.
+  Ask: "Is this the right idea, or am I in the sunk cost trap?" A new concept
+  prototyped fresh will almost always beat a fourth iteration of a struggling one.
+- Building 2-3 different concept variants and picking the best one is a healthier
+  strategy than iterating one concept to death. Natural selection between prototypes
+  beats willpower.
+- **Networked/multiplayer games:** A local prototype cannot validate the feel of a
+  networked mechanic. Latency fundamentally changes how combat, movement, and
+  prediction feel — a prototype running at 0ms local will feel entirely different at
+  80ms network delay. Use a local prototype to validate that the mechanic is
+  *interesting*. Do not use it as evidence that it *feels good* under real network
+  conditions. Network feel requires real peers or simulated latency (e.g., throttle
+  tools, network condition simulators).

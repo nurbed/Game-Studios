@@ -11,6 +11,9 @@ from prior Unity 2022/2023 knowledge.
 
 URP Compatibility Mode is gone. All custom render passes must use the Render Graph API.
 The LLM will suggest `Execute(ScriptableRenderContext, ref RenderingData)` — do not use it.
+### Use Unity 6.3 LTS for Production
+- **Supported Update releases** (6.4+): Latest features, supported only until the next one ships
+- **LTS** (6.3): Production-ready, 2-year support (until Dec 2027)
 
 ```csharp
 // ❌ OLD — compile error in 6.4
@@ -206,6 +209,13 @@ await Lightmapping.BakeAsync();
 // Auto Generate is OFF in Unity 6 — must bake manually after scene changes
 ```
 
+**This is URP's API.** `RecordRenderGraph` overrides URP's `ScriptableRenderPass`.
+HDRP custom passes are a separate API: a `CustomPass` subclass, run from a Custom
+Pass Volume, overrides `Setup(ScriptableRenderContext renderContext, CommandBuffer cmd)`,
+`Execute(CustomPassContext ctx)` and `Cleanup()` (HDRP 17.3, *Create a Custom
+Pass in a C# script*:
+https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@17.3/manual/Custom-Pass-Scripting.html).
+
 ---
 
 ## Performance
@@ -273,7 +283,57 @@ public IEnumerator Building_WhenPlaced_IncreasesPopulation() {
 }
 ```
 
-Run via Window > General > Test Runner.
+---
+
+## Command Line — Tests
+
+Documented (Unity Manual, *Run tests from the command line*; Test Framework
+command-line reference):
+`<Unity editor> -runTests -batchmode -projectPath <path> -testPlatform <platform> -testResults <file>`.
+`-batchmode` removes the need for user input. `-testPlatform` takes `EditMode`,
+`PlayMode` (Play Mode tests in the Editor) or a player platform; with no value,
+tests run in Edit Mode. `-testResults` defaults to the project root, and the
+file follows NUnit's XML format: the `<test-run>` element carries
+`testcasecount`, `result`, `passed` and `failed`, and each `<test-case>` a
+`fullname` and a `result` of `Passed`, `Failed`, `Inconclusive` or `Skipped`.
+Unity defines no common exit codes for test runs.
+
+Observed on Unity 6000.3.23f1 — not in the docs:
+- `-runTests` exits 0 when every test passes and 2 when one fails; 1 is a
+  compile error (no results file is written), 3 a failed run, 4 an unknown
+  `-testPlatform`. It exits by itself — no `-quit`.
+- Tests outside `Assets/` are never compiled: the run reports
+  `testcasecount="0"`, `result="Passed"` and exits 0 — a false pass.
+- Without the `com.unity.test-framework` package, `-runTests` hangs rather
+  than failing.
+- `Unity` on `PATH` may be Unity's separate CLI, not the editor; it rejects
+  `-batchmode` and `-version` with exit 2. Name the editor executable by its
+  full path.
+- `-batchmode -quit -projectPath . -logFile -` exits 1 on a compile error and
+  0 when clean.
+
+Sources:
+- Run tests from the command line: https://docs.unity3d.com/6000.3/Documentation/Manual/test-framework/run-tests-from-command-line.html
+- Test Framework command-line arguments: https://docs.unity3d.com/Packages/com.unity.test-framework@1.4/manual/reference-command-line.html
+- NUnit test result XML format: https://docs.nunit.org/articles/nunit/technical-notes/usage/Test-Result-XML-Format.html
+
+---
+
+## Debugging
+
+### Use Logging Best Practices
+
+```csharp
+// ✅ Structured logging (Unity 6+)
+using UnityEngine;
+
+Debug.Log($"Player {playerName} scored {score} points");
+
+// ✅ Conditional compilation for debug code
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    Debug.DrawRay(transform.position, direction, Color.red);
+#endif
+```
 
 ---
 
